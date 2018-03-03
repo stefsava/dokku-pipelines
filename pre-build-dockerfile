@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+
+argAppName=$1
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/internal-functions"
+
+pipelines_pre_build $argAppName
+

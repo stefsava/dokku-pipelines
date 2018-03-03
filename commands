@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+
+case "$1" in
+  help | pipelines:help)
+    help_content_func () {
+      declare desc="return help_content string"
+      cat<<help_content
+    pipelines:help, More information about dokku-pipelines
+help_content
+    }
+
+    if [[ $1 = "pipelines:help" ]] ; then
+        echo -e 'Usage: add a dokku-pieplines.yml file in the root directory'
+        echo ''
+        echo 'Use same syntaxt as bitbucket-pipelines.yml'
+        help_content_func | sort | column -c2 -t -s,
+    else
+        help_content_func
+    fi
+    ;;
+
+  *)
+    exit $DOKKU_NOT_IMPLEMENTED_EXIT
+    ;;
+
+esac
+

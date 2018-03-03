@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+
+pipelines_pre_build() {
+  local app=$1 DEFAULT_IMAGE=$(pipelines_get_config ".image")
+
+  if [[ -z "${DEFAULT_IMAGE}" || "${DEFAULT_IMAGE}" = "null" ]]; then
+    DEFAULT_IMAGE="ubuntu:latest"
+  fi
+
+  echo "default_image: ${DEFAULT_IMAGE}"
+
+  STEPS_COUNT=$(pipelines_get_config ".pipelines.default|length")
+
+  echo "steps count: ${STEPS_COUNT}"
+
+  local STEP_NO
+  for (( i=0; i<$STEPS_COUNT; i++ ));
+  do
+    STEP_NO=$i
+    echo "prepare step no: $STEP_NO"
+    pipelines_prepare_step $app $DEFAULT_IMAGE $STEP_NO
+  done
+}
+
+pipelines_prepare_step() {
+  local app=$1 DEFAULT_IMAGE="$2" STEP_NO="$3"
+  local IMAGE=$(pipelines_get_config ".pipelines.default[${STEP_NO}].step.image")
+  local cache=$(pipelines_get_config ".pipelines.default[${STEP_NO}].step.caches[0]")
+  local TMP_DIR=$(mktemp -d)
+  local SCRIPT_LIST=$(pipelines_get_config ".pipelines.default[${STEP_NO}].step.script[]")
+  local TMPFILE="${TMP_DIR}/step_${STEP_NO}.sh"
+
+  if [[ -z "$IMAGE" || "$IMAGE" = "null" ]]; then
+    IMAGE=$DEFAULT_IMAGE
+  fi
+
+  echo "using image: ${IMAGE} ; for step no: ${STEP_NO}"
+
+  if [[ $DOKKU_TRACE ]]; then
+    local SET_X_FLAG=" set -x"
+  fi
+
+  cat > "$TMPFILE" <<EOF
+#!/usr/bin/env bash
+set -e; set -o pipefail;$SET_X_FLAG
+
+cd /app
+EOF
+
+  # @see https://unix.stackexchange.com/a/164548/179662
+  TMPIFS=$IFS
+  IFS=
+  echo "$SCRIPT_LIST" >> "$TMPFILE"
+  IFS=$TMPIFS
+
+  chmod +x "$TMPFILE"
+
+  cache=$(pipelines_refine_cache_dir $app $cache)
+
+  pipelines_run_step $TMP_DIR $IMAGE $STEP_NO $cache
+}
+
+pipelines_refine_cache_dir () {
+  local app=$1 cache=$2
+
+  if [[ -z $cache || $cache = 'null' ]]; then
+    return 0
+  fi
+
+  TMPIFS=$IFS
+  IFS=':'
+  read -ra volDirs <<< "$cache"
+  IFS=$TMPIFS
+
+  hostDir="$HOME/.pipelines_cache/$app/"${volDirs[0]}
+  containerDir=${volDirs[1]}
+
+  # tmp solution
+  if [[ -z $hostDir || -z $containerDir ]]; then
+    return 0
+  fi
+
+  mkdir -p $hostDir
+
+  cacheDir="$hostDir:$containerDir"
+
+  echo $cacheDir
+}
+
+pipelines_run_step() {
+  local TMP_DIR="$1" IMAGE="$2" STEP_NO="$3" cache="$4"
+  local cacheVolumes=
+
+  if [[ ! -z $cache ]]; then
+    cacheVolumes="--volume $cache"
+  fi
+
+  # $([[ ! -z $cacheVolumes ]] && printf %s $cacheVolumes) \
+
+  docker run --rm --interactive \
+    --volume ${TMP_DIR}:/dokku-pipelines \
+    --volume $PWD:/app \
+    $([[ ! -z $cacheVolumes ]] && echo $cacheVolumes) \
+    --user $(id -u):$(id -g) \
+    ${IMAGE} /dokku-pipelines/step_${STEP_NO}.sh
+}
+
+pipelines_get_config() {
+  local PIPELINES_FILE="dokku-pipelines.yml"
+  cat ${PIPELINES_FILE} | docker run -i --rm evns/yq -r "$1"
+}

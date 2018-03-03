@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+
+pipelines_main_cmd() {
+  declare desc="default pipelines command"
+  local cmd="pipelines"
+
+  echo "For more information run pipelines:help"
+}
+
+pipelines_main_cmd "$@"
+
