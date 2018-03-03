@@ -7,6 +7,6 @@ Dokku plugin to add build pipelines for applications; similar to BitBucket pipel
 ## Installation
 ```bash
 # on 1.8.x
-sudo dokku plugin:install https://github.com/emado/dokku-pipelines.git pipelines
+sudo dokku plugin:install https://github.com/emados/dokku-pipelines.git pipelines
 ```
 
